@@ -7,3 +7,4 @@
 
    00-prepare.rst
    01-hello.rst
+   02-firstskill.rst
