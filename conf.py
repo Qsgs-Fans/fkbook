@@ -16,9 +16,9 @@ fk_repo_path = os.path.abspath('.')
 
 # -- Project information -----------------------------------------------------
 
-project = '新月杀制作组'
+project = '新月杀Lua拓展编写教程'
 copyright = '2023, Qsgs-Fans'
-author = 'Qsgs-Fans'
+author = '新月杀制作组'
 
 
 # -- General configuration ---------------------------------------------------
