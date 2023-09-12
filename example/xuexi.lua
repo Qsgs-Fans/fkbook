@@ -86,4 +86,27 @@ Fk:loadTranslationTable{
   ["$st__yingjie2"] = "吾好梦中杀人！",
   ["~st__caocao"] = "霸业未成！未成啊！",
 }
+
+local tester = General(extension, "st__tester", "shu", 4)
+local test = fk.CreateActiveSkill{
+  name = "st__test",
+  target_filter = function(self, to_select)
+    return true
+  end,
+  on_use = function(self, room, effect)
+    local from = room:getPlayerById(effect.from)  -- 这是你，技能的发动者
+    local to = room:getPlayerById(effect.tos[1])  -- 这是选择的第一个目标
+    -- 接下来就随意发挥吧！想写啥代码都行
+    room:changeHp(to, -1, nil, self.name)
+  end,
+}
+tester:addSkill(test)
+-- 这是来自谋徐盛的技能，可以在第一轮开始时立刻进入额外回合
+tester:addSkill("test_zhenggong")
+Fk:loadTranslationTable{
+  ["st__tester"] = "测试员",
+  ["st__test"] = "演练",
+  [":st__test"] = "出牌阶段，你可以演练。",
+}
+
 return extension
