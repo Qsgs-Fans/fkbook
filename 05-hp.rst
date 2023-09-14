@@ -318,14 +318,16 @@
 
 要创建一个触发技，我们使用 ``fk.CreateTriggerSkill`` 函数。该函数接收一个表作为参数，表中各种键值的含义如下：
 
-- ``name`` ：技能名。别和其他技能重名了。
-- ``frequency`` ：技能的发动频率，可能是锁定技。
+- ``name`` ：技能名。这是索引技能的唯一标识，所以别和其他技能重名了。
+- ``frequency`` ：技能的发动频率，建议填入特定变量——例如锁定技\ ``Skill.Compulsory``\ 。
 - ``anim_type`` ：技能的动画类型。上一篇好像已经聊过了。
 - ``mute`` ：技能是否静默。
 
 .. tip::
 
-  静默的技能不会播放配音、动画、发log，如果你想播放配音，就得自己手动做这些工作。
+  不静默的技能在发动时会随机播放音效、根据\ ``anim_type``\ 播放动画、发log。
+
+  而静默的技能不会播放配音、动画、发log，如果你想播放配音，就得自己手动做这些工作。
   有些需要根据情况手动播放相应配音的技能，比如自书、英魂等，就得先设为静默，然后自己去技能发动的环节添加这些跟播放特效有关的代码。
 
 上面这4项其实是对所有技能都通用的。下面是一些触发技专用的：
@@ -348,3 +350,110 @@
 - ``on_refresh`` ：类似 ``on_trigger`` ，但是是针对refresh。
 
 refresh和实际发动技能也差不多，一样的遍历，判断can_refresh，执行on_refresh。在实际trigger中，是 **先执行refresh，再执行use** 。
+
+认识我们要写的技能
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+现在是时候开始实践了。让我们看向这样一个技能：
+
+  节操：\ **锁定技**\ ，当你的体力值变化后，你摸一张牌。
+
+.. note::
+
+  在三国杀官方的实例中，诸如\ **锁定技**\ 、\ **限定技**\ 这类常出现在技能开头的词被称为“技能的标签”。一般会标粗显示，当然，并不是强制要求。
+
+\ **锁定技**\ 好理解；而体力值变化则涉及到刚才讲述的体力变化事件；摸一张牌则是这个技能的效果。
+在此，我们看一下体力变化事件触发时会传递什么信息（也就是\ ``data``\ 是什么）
+
+.. code-block:: lua
+  :linenos:
+  :lineno-start: 35
+  :emphasize-lines: 9-15, 17
+
+  local player, num, reason, skillName, damageStruct = table.unpack(self.data)
+  local room = self.room
+  local logic = room.logic
+  if num == 0 then
+    return false
+  end
+  assert(reason == nil or table.contains({ "loseHp", "damage", "recover" }, reason))
+
+  ---@type HpChangedData
+  local data = {
+    num = num,
+    reason = reason,
+    skillName = skillName,
+    damageEvent = damageStruct,
+  }
+  -- ...
+  logic:trigger(fk.HpChanged, player, data)
+
+可以看出，当体力变化事件被触发时，传入\ ``target``\ 的值为变动体力的人（\ ``player``\ ），而传入data的值则是由其他参数决定的一个表——\ **HpChangedData**\ 。
+
+.. note::
+  等等，lua不是只有表吗？这个HpChangedData是什么？
+  其实这个是EmmyLua新增的功能——或者说高亮。
+
+  .. seealso::
+
+    想了解EmmyLua可以去EmmyLua的\ `官方文档 <https://emmylua.github.io/index.html>`_\ 。这里只讲述新月杀涉及EmmyLua的部分。
+
+  通过溯源操作（Ctrl+左键）可以在\ ``system_enum.lua``\ 里找到它的定义：
+
+  .. code:: lua
+
+    --- 描述和一次体力变化有关的数据
+    ---@class HpChangedData
+    ---@field public num integer @ 体力变化量，可能是正数或者负数
+    ---@field public reason string @ 体力变化原因
+    ---@field public skillName string @ 引起体力变化的技能名
+    ---@field public damageEvent DamageStruct|nil @ 引起这次体力变化的伤害数据
+    ---@field public preventDying bool @ 是否阻止本次体力变更流程引发濒死流程
+  
+  这便是EmmyLua在新月杀里最主要的体现之一：创建枚举类。
+  这段代码定义了一个名为\ **HpChangedData**\ 的类，其中有\ ``num``\ 、\ ``reason``\ 、\ ``skillName``\ 、\ ``damageEvent``\ 和\ ``preventDying``\ 这五个参数。
+  如果相关的值不是特定类型（如\ ``reason``\ 的值是一个数），哪怕理论甚至实际执行上没啥问题，EmmyLua也会因此报错。
+  
+没什么好说的，参考〖集智〗，给测试员写一个吧：
+
+.. code-block:: lua
+  :linenos:
+
+  local st__jiecao = fk.CreateTriggerSkill{
+    name = "st__jiecao",
+    anim_type = "drawcard",
+    frequency = Skill.Compulsory,
+    events = {fk.HpChanged},
+    can_trigger = function(self, event, target, player, data)
+      return target == player and player:hasSkill(self.name)
+    end,
+    on_use = function(self, event, target, player, data)
+      player:drawCards(1, self.name)
+    end,
+  }
+  tester:addSkill(st__jiecao)
+  Fk:loadTranslationTable{
+    ["st__jiecao"] = "节操",
+    [":st__jiecao"] = "锁定技，当你的体力值变化后，你摸一张牌。",
+  }
+
+比起前面的\ `〖克己〗 <03-so.html#id2>`_\ 算简单了，但这里还是有一些地方说明一下比较好：
+
+.. code:: lua
+
+  can_trigger = function(self, event, target, player, data)
+    return target == player and player:hasSkill(self.name)
+  end,
+
+实际上来说，因为在很多时机里，data其实是可选项，不排除data == nil的情况，所以这里其实要加上\ ``and data``\ 判断data是否为nil，这里是确认data不可能为nil后才删去的。
+所以这里的代码仅仅只是判断体力变化的是不是你以及你有没有这技能而已。
+
+.. warning::
+
+  在不确认data是否有为nil的可能性时，极其建议先用\ ``and data``\ 判断data是否为nil（或者\ ``and data ~= nil``\ ）
+
+.. tip::
+
+  严谨的同学可能会发现这里没考虑\ ``data.num == 0``\ ，也就是“体力变化值为0”的情况，不过前面\ ``hp.lua``\ 的代码已经提前排除了这个情况(因为如果num == 0的话这个事件会直接终止)。
+
+然后嘛……就是单纯的摸一张牌。
