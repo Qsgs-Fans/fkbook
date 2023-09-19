@@ -87,6 +87,49 @@ Fk:loadTranslationTable{
   ["~st__caocao"] = "霸业未成！未成啊！",
 }
 
+local st__lvmeng = General(extension, "st__lvmeng", "wu", 4, 4, General.Male)
+local st__keji = fk.CreateTriggerSkill{
+name = "st__keji",
+anim_type = "offensive",
+events = {fk.EventPhaseChanging},
+can_trigger = function(self, event, target, player, data)
+  if target == player and player:hasSkill(self.name) then
+	if data.to ~= Player.NotActive then
+	  return true
+	end
+  end
+end,
+on_cost = function(self, event, target, player, data)
+  local room = player.room
+  local targets = {}
+  for _, p in ipairs(room:getOtherPlayers(player)) do
+	if not player:isProhibited(p, Fk:cloneCard("slash")) then
+	  table.insert(targets, p.id)
+	end
+  end
+  if #targets == 0 then return end
+  -- 这里的"#st__keji-choose"是你在询问中能看到的字符串，这个交给翻译表即可。
+  local to = room:askForChoosePlayers(player, targets, 1, 1, "#st__keji-choose", self.name, true)
+  if #to > 0 then
+	self.cost_data = {to[1]}
+	return true
+  end
+end,
+on_use = function(self, event, target, player, data)
+  local room = player.room
+  room:useVirtualCard("slash", nil, player, player.room:getPlayerById(self.cost_data[1]), self.name, true)
+  return true
+end,
+}
+st__lvmeng:addSkill(st__keji)
+
+Fk:loadTranslationTable{
+["st__lvmeng"] = "吕蒙",
+["st__keji"] = "克己",
+[":st__keji"] = "克己：你可以跳过任意阶段，视为使用一张无距离和次数限制的【杀】。",
+["#st__keji-choose"] = "克己：你可以跳过本阶段，视为使用一张【杀】"
+}
+
 local tester = General(extension, "st__tester", "shu", 4)
 local test = fk.CreateActiveSkill{
   name = "st__test",
@@ -107,6 +150,24 @@ Fk:loadTranslationTable{
   ["st__tester"] = "测试员",
   ["st__test"] = "演练",
   [":st__test"] = "出牌阶段，你可以演练。",
+}
+
+local st__jiecao = fk.CreateTriggerSkill{
+  name = "st__jiecao",
+  anim_type = "drawcard",
+  frequency = Skill.Compulsory,
+  events = {fk.HpChanged},
+  can_trigger = function(self, event, target, player, data)
+    return target == player and player:hasSkill(self.name)
+  end,
+  on_use = function(self, event, target, player, data)
+    player:drawCards(1, self.name)
+  end,
+}
+tester:addSkill(st__jiecao)
+Fk:loadTranslationTable{
+  ["st__jiecao"] = "节操",
+  [":st__jiecao"] = "锁定技，当你的体力值变化后，你摸一张牌。",
 }
 
 return extension
