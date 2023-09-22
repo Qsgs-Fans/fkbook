@@ -23,3 +23,4 @@
    03-so.rst
    04-gamerule.rst
    05-hp.rst
+   06-git.rst
