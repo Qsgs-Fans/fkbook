@@ -16,7 +16,7 @@
 事件的流程如下：
 
 1. 先确定体力值的变化量，如果变化量为0就结束事件。
-2. 触发时机“体力变化时”（\ ``fk.BeforeHpChanged``\ ）
+2. 触发时机“体力变化时”（\ ``fk.BeforeHpChanged``\ ），有可能在此时机被防止
 3. 修改角色的体力值。
 4. 触发时机“体力变化后”（\ ``fk.HpChanged``\ ）
 5. 若3中修改完体力值之后，若是扣减体力且角色的体力值不大于0，则产生濒死事件。
@@ -457,3 +457,115 @@ refresh和实际发动技能也差不多，一样的遍历，判断can_refresh�
   严谨的同学可能会发现这里没考虑\ ``data.num == 0``\ ，也就是“体力变化值为0”的情况，不过前面\ ``hp.lua``\ 的代码已经提前排除了这个情况(因为如果num == 0的话这个事件会直接终止)。
 
 接下来就是保存并测试了……
+
+失去体力事件
+--------------
+
+事件流程：
+
+1. 确定失去体力的数值，不大于0的话结束事件
+2. 触发时机“失去体力前”（\ ``fk.PreHpLost``\ ），有可能防止
+3. 构造一个{体力变化事件}来完成体力值的变化
+4. 触发时机“失去体力后”（\ ``fk.HpLost``\ ）
+
+如何构造事件：
+
+.. code:: lua
+
+  --- 令一名玩家失去体力。
+  ---@param player ServerPlayer @ 玩家
+  ---@param num integer @ 失去的数量
+  ---@param skillName string|nil @ 技能名
+  ---@return boolean
+  function Room:loseHp(player, num, skillName) end
+
+事件的触发时机对应的承担者为失去体力的玩家，对应的data为\ ``HpLostData``\ 类型：
+
+.. code:: lua
+
+  --- 描述跟失去体力有关的数据
+  ---@class HpLostData
+  ---@field public num integer @ 失去体力的数值
+  ---@field public skillName string @ 导致这次失去的技能名
+
+回复体力事件
+--------------
+
+类似失去体力事件。
+
+事件流程：
+
+1. 确定要回复体力的数值，不大于0的话结束事件
+2. 触发时机“回复体力前”（\ ``fk.PreHpRecover``\ ），有可能防止
+3. 构造一个{体力变化事件}来完成体力值的变化
+4. 触发时机“回复体力后”（\ ``fk.HpRecover``\ ）
+
+如何构造事件：
+
+.. code:: lua
+
+  ---@param recoverStruct RecoverStruct
+  ---@return boolean
+  function Room:recover(recoverStruct) end
+
+可以看到recover方法接受的参数类型是RecoverStruct。\
+RecoverStruct同时也是触发时机对应的data，内容如下：
+
+.. code:: lua
+
+  --- 用来描述和回复体力有关的数据。
+  ---@class RecoverStruct
+  ---@field public who ServerPlayer @ 回复体力的角色
+  ---@field public num integer @ 回复值
+  ---@field public recoverBy ServerPlayer|nil @ 此次回复的回复来源
+  ---@field public skillName string|nil @ 因何种技能而回复
+  ---@field public card Card|nil @ 造成此次回复的卡牌
+
+（结合一个含if语句的实例说明player.hp之类的属性获取方式）
+
+伤害事件
+---------
+
+这个事件比较复杂。流程如下：
+
+1. 先确定伤害值，不大于0的话就结束
+2. 触发时机“伤害开始前”（\ ``fk.PreDamage``\ ），有可能终止
+3. 触发时机“造成伤害时”（\ ``fk.DamageCaused``\ ），有可能终止
+4. 触发时机“受到伤害时”（\ ``fk.DamageInflicted``\ ），有可能终止
+5. 若是属性伤害且不是因为铁索传导造成的伤害，则认定受伤者是本次传导的起点；\
+   只要是属性伤害且受伤者处于横置状态，就重置受伤者
+5. 至此决定了伤害值，先扣减护甲，若护甲不足则构造{体力变化事件}修改体力值
+6. 触发时机“造成伤害后”（\ ``fk.Damage``\ ）
+7. 触发时机“受到伤害后”（\ ``fk.Damaged``\ ）
+
+事件完全结束后依然有一部分流程：
+
+1. 触发时机“伤害结算完毕后”（\ ``fk.DamageFinished``\ ）
+2. 若这是属性伤害且受伤者是传导的起点，则从当前回合角色开始对所有横置着的\
+   角色各进行一次属性伤害流程，该流程被标记为“因传导导致的伤害”
+
+如何构造事件：
+
+.. code:: lua
+
+  ---@param damageStruct DamageStruct
+  ---@return boolean
+  function Room:damage(damageStruct) end
+
+可以看到damage方法接受的参数类型是DamageStruct。\
+DamageStruct同时也是所有伤害相关触发时机对应的data，内容如下：
+
+.. code:: lua
+
+  --- DamageStruct 用来描述和伤害事件有关的数据。
+  ---@class DamageStruct
+  ---@field public from ServerPlayer|null @ 伤害来源
+  ---@field public to ServerPlayer @ 伤害目标
+  ---@field public damage integer @ 伤害值
+  ---@field public card Card | nil @ 造成伤害的牌
+  ---@field public chain bool @ 伤害是否是铁索传导的伤害
+  ---@field public damageType DamageType | nil @ 伤害的属性
+  ---@field public skillName string | nil @ 造成本次伤害的技能名
+  ---@field public beginnerOfTheDamage boolean | nil @ 是否是本次铁索传导的起点
+
+（一个涉及askFor式交互的卖血技能实例）

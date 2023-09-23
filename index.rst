@@ -24,3 +24,9 @@
    04-gamerule.rst
    05-hp.rst
    06-git.rst
+   07-gameflow.rst
+   08-debug.rst
+   09-judge-pindian.rst
+   10-movecard.rst
+   11-usecard.rst
+   12-death.rst
